@@ -1,12 +1,13 @@
 'use client';
 
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { Home, Users, Bell, MessageSquare, BookOpen, Bot, Settings, LogOut, Menu, X } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { Home, Users, Bell, MessageSquare, BookOpen, Bot, Settings, LogOut, Menu, X, Moon, Sun, Search } from 'lucide-react';
 import ElderFriendlyButton from './ElderFriendlyButton';
 import VersionBadge from './VersionBadge';
 import NotificationBell from './NotificationBell';
+import { ToastProvider, useToast } from './ToastProvider';
 import { useI18n } from '@/lib/i18n';
 import { isEnabled as isGrowthColumnEnabled } from '../plugins/growth-column/index.client';
 import { isEnabled as isFamilyButlerEnabled } from '../plugins/family-butler/index.client';
@@ -21,9 +22,47 @@ interface LayoutProps {
   };
 }
 
-export default function Layout({ children, user }: LayoutProps) {
+// 深色模式切换按钮组件
+function DarkModeToggle() {
+  const [isDark, setIsDark] = useState(false);
+  
+  useEffect(() => {
+    // 从localStorage和系统偏好初始化
+    const saved = localStorage.getItem('darkMode');
+    if (saved !== null) {
+      setIsDark(saved === 'true');
+    } else {
+      setIsDark(window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('darkMode', 'true');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('darkMode', 'false');
+    }
+  }, [isDark]);
+
+  return (
+    <button
+      onClick={() => setIsDark(!isDark)}
+      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+      title={isDark ? '切换到浅色模式' : '切换到深色模式'}
+    >
+      {isDark ? (
+        <Sun className="h-5 w-5 text-yellow-400" />
+      ) : (
+        <Moon className="h-5 w-5 text-gray-600" />
+      )}
+    </button>
+  );
+}
+
+function LayoutContent({ children, user }: LayoutProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { t } = useI18n();
 
@@ -37,6 +76,7 @@ export default function Layout({ children, user }: LayoutProps) {
   const baseNavigation = [
     { name: t('home'), href: '/dashboard', icon: Home },
     { name: t('family'), href: '/families', icon: Users },
+    { name: '搜索', href: '/search', icon: Search },
     { name: t('announcements'), href: '/announcements', icon: Bell },
     { name: t('messages'), href: '/messages', icon: MessageSquare },
     { name: t('chat'), href: '/chat', icon: MessageSquare },
@@ -76,22 +116,23 @@ export default function Layout({ children, user }: LayoutProps) {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Mobile Header */}
-      <header className="lg:hidden bg-white shadow-sm fixed top-0 left-0 right-0 z-50">
+      <header className="lg:hidden bg-white dark:bg-gray-800 shadow-sm fixed top-0 left-0 right-0 z-50">
         <div className="px-4 py-3 flex justify-between items-center">
           <Link href="/dashboard" className="flex items-center space-x-2">
             <Home className="h-7 w-7 text-family-500" />
             <div className="flex flex-col">
-              <span className="text-xl font-bold text-family-800">{t('family_center')}</span>
-              <span className="text-xs text-gray-400">v1.2.5</span>
+              <span className="text-xl font-bold text-family-800 dark:text-white">{t('family_center')}</span>
+              <span className="text-xs text-gray-400">v1.2.6</span>
             </div>
           </Link>
           <div className="flex items-center gap-2">
+            <DarkModeToggle />
             <NotificationBell userId={user.id} />
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-lg hover:bg-gray-100"
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
             >
-              {mobileMenuOpen ? <X className="h-7 w-7 text-gray-600" /> : <Menu className="h-7 w-7 text-gray-600" />}
+              {mobileMenuOpen ? <X className="h-7 w-7 text-gray-600 dark:text-gray-300" /> : <Menu className="h-7 w-7 text-gray-600 dark:text-gray-300" />}
             </button>
           </div>
         </div>
@@ -170,13 +211,16 @@ export default function Layout({ children, user }: LayoutProps) {
       )}
 
       {/* Desktop Sidebar */}
-      <div className="hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:w-64 lg:flex-col lg:bg-white lg:shadow-lg">
-        <div className="p-4 flex items-center space-x-2 border-b border-gray-200">
-          <Home className="h-8 w-8 text-family-500" />
-          <div>
-            <h1 className="text-xl font-bold text-family-800">{t('family_center')}</h1>
-            <p className="text-xs text-gray-400">v1.2.5</p>
-          </div>
+      <div className="hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:w-64 lg:flex-col lg:bg-white lg:shadow-lg dark:bg-gray-800">
+        <div className="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
+          <Link href="/dashboard" className="flex items-center space-x-2">
+            <Home className="h-8 w-8 text-family-500" />
+            <div>
+              <h1 className="text-xl font-bold text-family-800 dark:text-white">{t('family_center')}</h1>
+              <p className="text-xs text-gray-400">v1.2.6</p>
+            </div>
+          </Link>
+          <DarkModeToggle />
         </div>
         <div className="flex-1 flex flex-col overflow-y-auto">
           <div className="flex items-center space-x-3 mb-6 p-3 mx-3 bg-family-50 rounded-xl">
@@ -281,5 +325,16 @@ export default function Layout({ children, user }: LayoutProps) {
       {/* Version Badge */}
       <VersionBadge />
     </div>
+  );
+}
+
+// 导出包装后的 Layout，使用 ToastProvider 包裹
+export default function Layout({ children, user }: LayoutProps) {
+  return (
+    <ToastProvider>
+      <LayoutContent user={user}>
+        {children}
+      </LayoutContent>
+    </ToastProvider>
   );
 }
