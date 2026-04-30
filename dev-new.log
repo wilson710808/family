@@ -1,21 +1,26 @@
-nohup: ignoring input
 
 > family-website@1.2.7 dev
 > next dev -p 3000
 
 ▲ Next.js 16.2.4 (Turbopack)
 - Local:         http://localhost:3000
-- Network:       http://9.96.170.125:3000
-✓ Ready in 66s
+- Network:       http://9.96.9.23:3000
+✓ Ready in 63s
 ⚠ Invalid next.config.mjs options detected: 
 ⚠     Unrecognized key(s) in object: 'swcMinify'
 ⚠ See more info here: https://nextjs.org/docs/messages/invalid-next-config
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+⚠ Slow filesystem detected. The benchmark took 659ms. If /home/gem/.aily/workdir/feishu_p2p_14a24f49/family_website_review/.next/dev is a network drive, consider moving it to a local folder.
+See more: https://nextjs.org/docs/app/guides/local-development
 ○ Compiling middleware ...
 ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
 - Experiments (use with caution):
   · optimizePackageImports
 
-○ Compiling / ...
 ✅ 成長專欄插件數據庫初始化完成
 ✅ 留言板插件數據庫初始化完成
 ✅ 家族管家插件數據庫初始化完成
@@ -39,10 +44,4 @@ nohup: ignoring input
   118 |       db.prepare( {
   code: 'SQLITE_ERROR'
 }
- GET / 200 in 36.2s (next.js: 35.0s, proxy.ts: 297ms, application-code: 869ms)
- GET / 307 in 2.1min (next.js: 112s, proxy.ts: 681ms, application-code: 16.3s)
- GET / 307 in 581ms (next.js: 135ms, proxy.ts: 273ms, application-code: 174ms)
-○ Compiling /login ...
- GET /login 200 in 8.1s (next.js: 7.3s, proxy.ts: 237ms, application-code: 582ms)
- GET / 307 in 734ms (next.js: 166ms, proxy.ts: 334ms, application-code: 234ms)
- GET /login 200 in 583ms (next.js: 136ms, proxy.ts: 274ms, application-code: 173ms)
+ GET / 307 in 28.8s (next.js: 11.4s, proxy.ts: 621ms, application-code: 16.8s)
