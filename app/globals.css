@@ -39,7 +39,88 @@ a {
   }
 }
 
-/* 深色模式样式 */
+/* ===========================
+   统一字体大小 - 全站最小16px
+   =========================== */
+html {
+  font-size: 16px; /* 基础字号 */
+}
+
+/* 确保全站最小字体为16px */
+body, p, span, div, input, textarea, button, label, li, td, th {
+  font-size: min(16px, 1rem) !important;
+}
+
+/* 主要文字使用较大字号 */
+h1, h2, h3, h4, h5, h6 {
+  font-size: 1.25em !important; /* 20px */
+}
+
+h1 { font-size: 1.5em !important; /* 24px */ }
+h2 { font-size: 1.375em !important; /* 22px */ }
+h3 { font-size: 1.25em !important; /* 20px */ }
+
+/* 输入框和按钮默认字号 */
+input, textarea, select {
+  font-size: 16px !important;
+}
+
+button {
+  font-size: 16px !important;
+}
+
+/* ===========================
+   大字模式 - 全站字體放大1.5倍
+   =========================== */
+.large-text-mode {
+  font-size: 1.5em !important; /* 整体放大1.5倍 */
+}
+
+.large-text-mode body,
+.large-text-mode p,
+.large-text-mode span,
+.large-text-mode div,
+.large-text-mode input,
+.large-text-mode textarea,
+.large-text-mode button,
+.large-text-mode label,
+.large-text-mode li,
+.large-text-mode td,
+.large-text-mode th {
+  font-size: 1.5em !important;
+}
+
+.large-text-mode h1 { font-size: 2.25em !important; /* 36px */ }
+.large-text-mode h2 { font-size: 2em !important; /* 32px */ }
+.large-text-mode h3 { font-size: 1.75em !important; /* 28px */ }
+.large-text-mode h4 { font-size: 1.5em !important; /* 24px */ }
+
+/* 大字模式下的导航和按钮 */
+.large-text-mode .fixed.bottom-0 button,
+.large-text-mode .fixed.bottom-0 a {
+  font-size: 1.25em !important;
+}
+
+.large-text-mode .bg-white button,
+.large-text-mode .bg-white a {
+  font-size: 1.125em !important;
+}
+
+/* 大字模式下的输入框 */
+.large-text-mode input,
+.large-text-mode textarea {
+  font-size: 1.5em !important;
+  padding: 0.75em !important;
+}
+
+/* 大字模式下的图标也放大 */
+.large-text-mode svg {
+  transform: scale(1.25);
+}
+
+/* ===========================
+   深色模式样式
+   =========================== */
 .dark {
   --background: #111827;
   --foreground: #f3f4f6;
@@ -150,6 +231,103 @@ a {
   background: #6b7280;
 }
 
+/* ===========================
+   平板适配样式
+   =========================== */
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* 平板上增大按钮和字体 */
+  .md\:text-lg {
+    font-size: 1.125rem !important;
+  }
+  
+  .md\:text-xl {
+    font-size: 1.25rem !important;
+  }
+  
+  /* 平板底部导航更大 */
+  .fixed.bottom-0 {
+    height: 6rem !important;
+  }
+  
+  .fixed.bottom-0 svg {
+    width: 2rem !important;
+    height: 2rem !important;
+  }
+  
+  /* 平板上的输入框更大 */
+  input, textarea {
+    font-size: 1.125rem !important;
+    padding: 1rem !important;
+  }
+  
+  /* 平板按钮更大 */
+  button {
+    min-height: 3rem !important;
+  }
+}
+
+/* ===========================
+   在线状态指示器
+   =========================== */
+.online-indicator {
+  position: relative;
+}
+
+.online-indicator::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 0.75rem;
+  height: 0.75rem;
+  background-color: #22c55e;
+  border: 2px solid white;
+  border-radius: 50%;
+}
+
+/* ===========================
+   表情回应样式
+   =========================== */
+.reaction-popup {
+  animation: popIn 0.2s ease-out;
+}
+
+@keyframes popIn {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.reaction-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background-color: #f3f4f6;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.reaction-badge:hover {
+  background-color: #e5e7eb;
+  transform: scale(1.05);
+}
+
+.reaction-badge.active {
+  background-color: #dbeafe;
+  border: 1px solid #3b82f6;
+}
+
+/* ===========================
+   实用工具类
+   =========================== */
 @layer utilities {
   .scrollbar-hide {
     -ms-overflow-style: none;
@@ -158,4 +336,40 @@ a {
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+  
+  /* 触摸友好 */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* 焦点可见性（无障碍） */
+  .focus-visible-ring:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
+}
+
+/* ===========================
+   兴趣标签样式
+   =========================== */
+.interest-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  background-color: #e0e7ff;
+  color: #4338ca;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  margin: 0.125rem;
+}
+
+.interest-tag.edit-mode {
+  background-color: #fee2e2;
+  color: #dc2626;
+  cursor: pointer;
+}
+
+.interest-tag.edit-mode:hover {
+  background-color: #fecaca;
 }

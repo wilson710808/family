@@ -3,7 +3,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Users, Bell, MessageSquare, BookOpen, Bot, Settings, LogOut, Menu, X, Moon, Sun, Search } from 'lucide-react';
+import { Home, Users, Bell, MessageSquare, BookOpen, Bot, Settings, LogOut, Menu, X, Moon, Sun, Search, Type, MessageCircle } from 'lucide-react';
 import ElderFriendlyButton from './ElderFriendlyButton';
 import VersionBadge from './VersionBadge';
 import NotificationBell from './NotificationBell';
@@ -20,6 +20,44 @@ interface LayoutProps {
     avatar: string;
     is_admin?: number;
   };
+}
+
+// 大字模式切换按钮组件
+function LargeTextToggle() {
+  const [isLargeText, setIsLargeText] = useState(false);
+  
+  useEffect(() => {
+    // 从localStorage初始化
+    const saved = localStorage.getItem('largeTextMode');
+    if (saved !== null) {
+      setIsLargeText(saved === 'true');
+      if (saved === 'true') {
+        document.documentElement.classList.add('large-text-mode');
+      }
+    }
+  }, []);
+
+  const toggleLargeText = () => {
+    const newValue = !isLargeText;
+    setIsLargeText(newValue);
+    localStorage.setItem('largeTextMode', String(newValue));
+    
+    if (newValue) {
+      document.documentElement.classList.add('large-text-mode');
+    } else {
+      document.documentElement.classList.remove('large-text-mode');
+    }
+  };
+
+  return (
+    <button
+      onClick={toggleLargeText}
+      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+      title={isLargeText ? '切换到普通模式' : '切换到大字模式'}
+    >
+      <Type className={`h-5 w-5 ${isLargeText ? 'text-green-500' : 'text-gray-600 dark:text-gray-400'}`} />
+    </button>
+  );
 }
 
 // 深色模式切换按钮组件
@@ -66,27 +104,21 @@ function LayoutContent({ children, user }: LayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { t } = useI18n();
 
-  // 获取第一个家族ID（从cookie或默认）
-  const getDefaultFamilyHref = () => {
-    // 成長專欄鏈接，默認帶 familyId=1，實際使用時會正確處理
-    return '/plugins/growth-column?familyId=1';
-  };
-
-  // 导航菜单 - 基础导航
-  const baseNavigation = [
-    { name: t('home'), href: '/dashboard', icon: Home },
-    { name: t('family'), href: '/families', icon: Users },
-    { name: '搜索', href: '/search', icon: Search },
-    { name: t('announcements'), href: '/announcements', icon: Bell },
-    { name: t('messages'), href: '/messages', icon: MessageSquare },
-    { name: t('chat'), href: '/chat', icon: MessageSquare },
-  ];
-
   // 獲取第一個家族ID（從cookie或默認）
   const getDefaultFamilyHrefWithId = (path: string) => {
     // 默認帶 familyId=1，實際使用時會正確處理
     return `${path}?familyId=1`;
   };
+
+  // 导航菜单 - 整合后的基础导航
+  // 合并「聊天」和「留言板」为「聊天」功能，统一使用MessageSquare图标
+  const baseNavigation = [
+    { name: '首頁', href: '/dashboard', icon: Home },
+    { name: '家族', href: '/families', icon: Users },
+    { name: '搜索', href: '/search', icon: Search },
+    { name: '公告', href: '/announcements', icon: Bell },
+    { name: '聊天', href: '/chat', icon: MessageSquare },
+  ];
 
   // 插件只有启用了才添加到导航中（真正的插拔体验）
   const navigation = [...baseNavigation];
@@ -97,14 +129,16 @@ function LayoutContent({ children, user }: LayoutProps) {
     navigation.push({ name: '家族管家', href: getDefaultFamilyHrefWithId('/plugins/family-butler'), icon: Bot });
   }
 
-  // 底部导航：根据启用插件数量动态设置列数，保证都在同一行
+  // 底部导航：根据启用插件数量动态设置列数
+  // 整合后最多显示6个（桌面端）或5个（移动端底部）
   const enabledPluginsCount = [isGrowthColumnEnabled(), isFamilyButlerEnabled()].filter(Boolean).length;
   const totalItems = baseNavigation.length + enabledPluginsCount;
-  const bottomNavigation = navigation.slice(0, totalItems);
+  // 移动端底部导航最多显示5个
+  const bottomNavigation = navigation.slice(0, 5);
 
   // 管理员专属导航
   const adminNavigation = [
-    { name: t('system_admin'), href: '/admin', icon: Settings },
+    { name: '系統管理', href: '/admin', icon: Settings },
   ];
 
   // 处理登出
@@ -122,10 +156,11 @@ function LayoutContent({ children, user }: LayoutProps) {
             <Home className="h-7 w-7 text-family-500" />
             <div className="flex flex-col">
               <span className="text-xl font-bold text-family-800 dark:text-white">{t('family_center')}</span>
-              <span className="text-xs text-gray-400">v1.2.6</span>
+              <span className="text-xs text-gray-400">v1.2.7</span>
             </div>
           </Link>
           <div className="flex items-center gap-2">
+            <LargeTextToggle />
             <DarkModeToggle />
             <NotificationBell userId={user.id} />
             <button
@@ -217,10 +252,13 @@ function LayoutContent({ children, user }: LayoutProps) {
             <Home className="h-8 w-8 text-family-500" />
             <div>
               <h1 className="text-xl font-bold text-family-800 dark:text-white">{t('family_center')}</h1>
-              <p className="text-xs text-gray-400">v1.2.6</p>
+              <p className="text-xs text-gray-400">v1.2.7</p>
             </div>
           </Link>
-          <DarkModeToggle />
+          <div className="flex items-center gap-1">
+            <LargeTextToggle />
+            <DarkModeToggle />
+          </div>
         </div>
         <div className="flex-1 flex flex-col overflow-y-auto">
           <div className="flex items-center space-x-3 mb-6 p-3 mx-3 bg-family-50 rounded-xl">
@@ -252,7 +290,7 @@ function LayoutContent({ children, user }: LayoutProps) {
             {/* 管理员菜单 */}
             {user.is_admin === 1 && (
               <div className="pt-4 border-t border-gray-200 mt-4">
-                <p className="text-xs text-gray-500 font-semibold mb-2 px-3">管理员功能</p>
+                <p className="text-xs text-gray-500 font-semibold mb-2 px-3">管理員功能</p>
                 {adminNavigation.map(item => {
                   const Icon = item.icon;
                   const isActive = pathname === item.href;
@@ -292,11 +330,13 @@ function LayoutContent({ children, user }: LayoutProps) {
         </div>
       </main>
 
-      {/* Mobile Bottom Navigation - 动态设置列数，根据启用插件数量 */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 h-20">
+      {/* Mobile Bottom Navigation - 整合后统一使用MessageSquare图标 */}
+      {/* 移除重复的聊天入口，现在只有「聊天」一个入口 */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 h-20 md:h-24">
         <div
           className={`grid h-full ${
-            totalItems === 5 ? 'grid-cols-5' : totalItems === 6 ? 'grid-cols-6' : totalItems === 7 ? 'grid-cols-7' : 'grid-cols-5'
+            bottomNavigation.length === 5 ? 'grid-cols-5' : 
+            bottomNavigation.length === 4 ? 'grid-cols-4' : 'grid-cols-5'
           }`}
         >
           {bottomNavigation.map(item => {
@@ -309,18 +349,18 @@ function LayoutContent({ children, user }: LayoutProps) {
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex flex-col items-center justify-center space-y-1 ${isActive ? 'text-family-500' : 'text-gray-500'}`}
+                className={`flex flex-col items-center justify-center space-y-1 md:space-y-2 ${isActive ? 'text-family-500' : 'text-gray-500'}`}
               >
-                <Icon className="h-6 w-6" />
-                <span className="text-xs font-semibold truncate px-1">{displayName}</span>
+                <Icon className="h-6 w-6 md:h-8 md:w-8" />
+                <span className="text-xs md:text-sm font-semibold truncate px-1">{displayName}</span>
               </Link>
             );
           })}
         </div>
       </nav>
 
-      {/* Mobile Bottom Padding */}
-      <div className="h-20 lg:hidden" />
+      {/* Mobile Bottom Padding - 增加平板适配空间 */}
+      <div className="h-20 lg:hidden md:h-24" />
 
       {/* Version Badge */}
       <VersionBadge />

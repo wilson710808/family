@@ -1,6 +1,64 @@
 # 更新日志
 
-## v1.2.0 (2026-03-21)
+## v1.2.7 (2026-04-30)
+
+### 🔴 高優先級優化
+
+1. **整合導航結構**
+   - 合併「聊天」和「留言板」功能，統一使用MessageSquare圖標
+   - 統一底部導航，移除重複項目
+   - 調整組件`components/Layout.tsx`
+
+2. **添加返回按鈕**
+   - 新增統一返回按鈕組件`components/BackButton.tsx`
+   - 在所有子頁面添加返回導航
+   - 確保移動端導航清晰
+
+3. **添加大字模式**
+   - 新增一鍵切換大字模式按鈕（位於導航欄）
+   - 大字模式下全站字體放大1.5倍
+   - 保存用戶偏好到localStorage
+
+4. **統一字體大小**
+   - 全站最小字體設為16px
+   - 調整`app/globals.css`
+
+### 🟡 中優先級優化
+
+5. **添加語音輸入功能**
+   - 在聊天輸入框添加麥克風按鈕
+   - 使用Web Speech API實現語音轉文字
+   - 兼容性檢測和提示
+   - 新增組件`components/VoiceInput.tsx`
+
+6. **添加興趣標籤系統**
+   - 用戶資料頁添加興趣標籤編輯
+   - 預設40+興趣標籤可選
+   - 新增API `/api/users/interests`
+   - 新增API `/api/users/[id]/interests`
+   - 新增組件`components/InterestTags.tsx`
+
+7. **添加表情回應功能**
+   - 訊息支持 Reactions
+   - 點擊訊息顯示可選擇的表情
+   - 8種常用表情可選
+   - 新增API `/api/messages/[id]/reactions`
+   - 新增組件`components/ReactionPicker.tsx`
+
+### 🟢 錦上添花
+
+8. **成員上線狀態**
+   - 顯示綠點表示在線
+   - 新增組件`components/OnlineStatus.tsx`
+
+9. **平板電腦適配**
+   - 底部導航按鈕在平板上更大
+   - 響應式調整
+   - 輸入框和按鈕在平板上更大
+
+### 🔐 數據庫變更
+- 新增 `user_interests` 表：用戶興趣標籤
+- 新增 `message_reactions` 表：表情回應
 
 ### ✨ 新增功能
 - 🎁 **生日/纪念日提醒插件** (完全可插拔设计)

@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Layout from '@/components/Layout';
+import BackButton from '@/components/BackButton';
 import { Bell, Plus, Clock, User, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 

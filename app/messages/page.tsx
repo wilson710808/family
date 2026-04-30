@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Layout from '@/components/Layout';
+import BackButton from '@/components/BackButton';
 import { MessageSquare, Plus, Clock, User, Send, Trash2 } from 'lucide-react';
 
 interface Message {

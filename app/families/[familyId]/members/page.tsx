@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
+import BackButton from '@/components/BackButton';
 import { useToast } from '@/components/ToastProvider';
 import { Users, Plus, Clock, User, Trash2, Shield, Crown, Star, UserMinus, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';

@@ -5,6 +5,7 @@ import { io, Socket } from 'socket.io-client';
 import Layout from '@/components/Layout';
 import { useToast } from '@/components/ToastProvider';
 import { Send, Users, MessageSquare, Clock, Bot, Check, CheckCheck, Image, Smile, X, Edit2, Trash2, AtSign, Search } from 'lucide-react';
+import VoiceInput from '@/components/VoiceInput';
 
 interface ChatMessage {
   id: number;
@@ -316,6 +317,14 @@ function ChatContent() {
     } catch (error) {
       console.error('发送失败:', error);
       showToast('发送失败，请重试', 'error');
+    }
+  };
+
+  // 处理语音输入结果
+  const handleVoiceResult = (text: string) => {
+    if (text) {
+      setNewMessage(prev => prev + text);
+      messageInputRef.current?.focus();
     }
   };
 
@@ -974,6 +983,13 @@ function ChatContent() {
               >
                 <AtSign className="h-5 w-5" />
               </button>
+
+              {/* 语音输入按钮 */}
+              <VoiceInput 
+                onResult={handleVoiceResult} 
+                disabled={!connected}
+                className="p-3"
+              />
 
               <form onSubmit={editingMessageId ? (e) => { e.preventDefault(); handleEditMessage(editingMessageId); } : handleSendMessage} className="flex-1 flex space-x-3">
                 <input
