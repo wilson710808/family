@@ -43,6 +43,18 @@ const translations: Record<string, Record<string, string>> = {
     online: '在線',
     offline: '離線',
     back: '返回',
+    // 演示账号
+    demo_account: '演示帳號',
+    demo_email: 'admin@family.com',
+    demo_password: 'admin123456',
+    login_failed: '登入失敗',
+    network_error: '網絡錯誤',
+    loading: '載入中...',
+    welcome_back_to_family: '歡迎回到家族',
+    email: '電子郵箱',
+    password: '密碼',
+    no_account_yet: '還沒有帳號？',
+    create_account: '創建帳號',
   },
   'zh-CN': {
     home: '首页',
@@ -78,6 +90,18 @@ const translations: Record<string, Record<string, string>> = {
     online: '在线',
     offline: '离线',
     back: '返回',
+    // 演示账号
+    demo_account: '演示账号',
+    demo_email: 'admin@family.com',
+    demo_password: 'admin123456',
+    login_failed: '登录失败',
+    network_error: '网络错误',
+    loading: '加载中...',
+    welcome_back_to_family: '欢迎回到家族',
+    email: '电子邮箱',
+    password: '密码',
+    no_account_yet: '还没有帐号？',
+    create_account: '创建帐号',
   },
 };
 
