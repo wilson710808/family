@@ -50,7 +50,7 @@ class SocketManager {
         origin: '*',
         methods: ['GET', 'POST'],
       },
-      path: '/socket.io/',
+      path: '/ws/02-family/socket.io/',
     });
 
     console.log('[Socket] Initialized');
