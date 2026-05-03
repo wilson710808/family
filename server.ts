@@ -5,17 +5,22 @@ const next = require('next');
 const fs = require('fs');
 const path = require('path');
 
-// 直接导入 TypeScript 源文件，tsx 会处理编译
+// 初始化數據庫
+require('./lib/db.ts');
+const { initializeDatabase } = require('./lib/db.ts');
+initializeDatabase();
+
+// 導入 Socket.IO Manager
 const { socketManager } = require('./lib/socket.ts');
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = process.env.HOSTNAME || '0.0.0.0';
 const port = parseInt(process.env.PORT || '3002', 10);
 
-// 静态文件目录
+// 靜態文件目錄
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
 
-// MIME 类型映射
+// MIME 類型映射
 const MIME_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -25,7 +30,7 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 
-// HTTPS 配置 - 当证书存在时启用 HTTPS
+// HTTPS 配置 - 當證書存在時啟用 HTTPS
 let httpsOptions: { key: Buffer; cert: Buffer; ca?: Buffer } | null = null;
 const sslKeyPath = process.env.SSL_KEY_PATH || './certs/private.key';
 const sslCertPath = process.env.SSL_CERT_PATH || './certs/certificate.crt';
@@ -36,7 +41,7 @@ if (fs.existsSync(sslKeyPath) && fs.existsSync(sslCertPath)) {
     key: fs.readFileSync(sslKeyPath),
     cert: fs.readFileSync(sslCertPath),
   };
-  // 如果有 CA 证书链，也加上
+  // 如果有 CA 證書鏈，也加上
   if (fs.existsSync(sslCaPath)) {
     httpsOptions.ca = fs.readFileSync(sslCaPath);
   }
@@ -58,11 +63,11 @@ app.prepare().then(() => {
     try {
       const parsedUrl = parse(req.url, true);
       
-      // 处理静态文件请求 (uploads 目录)
+      // 處理靜態文件請求 (uploads 目錄)
       if (parsedUrl.pathname?.startsWith('/uploads/')) {
         const filePath = path.join(UPLOADS_DIR, parsedUrl.pathname.replace('/uploads/', ''));
         
-        // 检查文件是否存在
+        // 檢查文件是否存在
         if (fs.existsSync(filePath)) {
           const ext = path.extname(filePath).toLowerCase();
           const contentType = MIME_TYPES[ext] || 'application/octet-stream';
@@ -104,10 +109,10 @@ app.prepare().then(() => {
   // 初始化 Socket.IO
   socketManager.init(server);
 
-  // 定期清理不活跃用户
+  // 定期清理不活躍用戶
   setInterval(() => {
     socketManager.cleanupInactiveUsers();
-  }, 60 * 1000); // 每分钟检查一次
+  }, 60 * 1000); // 每分鐘檢查一次
 
   server
     .once('error', (err: any) => {
@@ -117,5 +122,6 @@ app.prepare().then(() => {
     .listen(port, hostname, () => {
       console.log(`> Ready on ${protocol}://${hostname}:${port}`);
       console.log('> Socket.IO initialized ✓');
+      console.log('> AI Gateway URL:', process.env.AI_GATEWAY_URL || 'https://www.herelai.fun/ws/05-ai-gateway/api/query');
     });
 });

@@ -1,433 +1,435 @@
 /**
- * 家族管家 - AI 服務
- * 使用 NVIDIA API Llama 3.1 提供快速響應
- * 支持會話上下文記憶 + 每日摘要 + 成員畫像
+ * AI Gateway Service - 使用 ai-gateway API 實現家族管家 AI 功能
+ * 
+ * API Endpoint: POST https://www.herelai.fun/ws/05-ai-gateway/api/query
+ * 
+ * 請求格式:
+ * {
+ *   "app_id": "your_app_identifier",
+ *   "user_id": "user_unique_id",
+ *   "query_data": "用戶的問題或輸入內容",
+ *   "messages": [...],
+ *   "options": {
+ *     "temperature": 0.7,
+ *     "max_tokens": 2000
+ *   }
+ * }
  */
 
-import type { AIReplyRequest, TaskDetectionResult, SentimentDetectionResult } from './types';
+import { db } from '../../lib/db';
 
-const NVIDIA_API_URL = process.env.OPENAI_BASE_URL 
-  ? `${process.env.OPENAI_BASE_URL}/chat/completions` 
-  : 'https://integrate.api.nvidia.com/v1/chat/completions';
+// 環境配置
+const AI_GATEWAY_URL = process.env.AI_GATEWAY_URL || 'https://www.herelai.fun/ws/05-ai-gateway/api/query';
+const AI_GATEWAY_APP_ID = process.env.AI_GATEWAY_APP_ID || 'family-butler';
+const AI_GATEWAY_TIMEOUT = 60000; // 60 秒超時
 
-const DEFAULT_MODEL = process.env.FAMILY_BUTLER_MODEL || process.env.OPENAI_MODEL || 'meta/llama-3.1-8b-instruct';
-
-function getApiKey(): string {
-  return process.env.NVIDIA_API_KEY || process.env.OPENAI_API_KEY || '';
-}
-
-function repairJson(text: string): string {
-  let cleaned = text.trim();
-  cleaned = cleaned.replace(/```json/g, '').replace(/```/g, '').trim();
-  
-  try {
-    JSON.parse(cleaned);
-    return cleaned;
-  } catch (e1) {
-    let fixed = cleaned;
-    const openBraces = (fixed.match(/\{/g) || []).length;
-    const closeBraces = (fixed.match(/\}/g) || []).length;
-    const openBrackets = (fixed.match(/\[/g) || []).length;
-    const closeBrackets = (fixed.match(/\]/g) || []).length;
-    
-    for (let i = 0; i < openBraces - closeBraces; i++) fixed += '}';
-    for (let i = 0; i < openBrackets - closeBrackets; i++) fixed += ']';
-    
-    try {
-      JSON.parse(fixed);
-      return fixed;
-    } catch (e2) {
-      fixed = fixed.replace(/,\s*$/, '');
-      try {
-        JSON.parse(fixed);
-        return fixed;
-      } catch (e3) {
-        console.warn('[FamilyButler] JSON 解析完全失敗，使用啟發式回退');
-        return '{}';
-      }
-    }
-  }
-}
-
-async function callNVIDIAWithHistory(
-  systemPrompt: string,
-  messages: Array<{role: string; content: string}>,
-  temperature: number = 0.7
-): Promise<string> {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error('NVIDIA_API_KEY 未配置');
-
-  const response = await fetch(NVIDIA_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: DEFAULT_MODEL,
-      messages: [{ role: 'system', content: systemPrompt }, ...messages],
-      temperature,
-      max_tokens: 2048,
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`NVIDIA API 調用失敗: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0]?.message?.content || '';
-}
-
-async function callNVIDIA(prompt: string, temperature: number = 0.7): Promise<string> {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error('NVIDIA_API_KEY 未配置');
-
-  const response = await fetch(NVIDIA_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: DEFAULT_MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      temperature,
-      max_tokens: 1024,
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`NVIDIA API 調用失敗: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0]?.message?.content || '';
-}
-
-export interface ExtendedAIReplyRequest extends AIReplyRequest {
-  sessionHistory?: Array<{role: 'user' | 'assistant'; content: string}>;
-  userPreferences?: Record<string, string>;
+export interface ButlerContext {
+  familyId: number;
+  userId: number;
+  userName: string;
+  message: string;
+  recentMessages: Array<{ userName: string; content: string }>;
+  context: {
+    hasBirthdayToday?: boolean;
+    birthdayPerson?: string;
+    isHoliday?: boolean;
+    holidayName?: string;
+    upcomingEvents?: any[];
+    upcomingReminders?: any[];
+  };
   familyProfile?: {
-    recentSummaries?: string[];
-    memberProfiles?: Array<{
+    memberProfiles: Array<{
       user_name: string;
-      personality_traits?: string[];
-      concerns?: string[];
-      achievements?: string[];
+      personality_traits: string[];
+      concerns: string[];
+      achievements: string[];
     }>;
+    recentSummaries: string[];
   };
 }
 
-export async function generateButlerReply(request: ExtendedAIReplyRequest): Promise<string> {
-  const { message, recentMessages, context, sessionHistory, userPreferences, familyProfile } = request;
+export interface AIGatewayResponse {
+  success: boolean;
+  data?: {
+    choices?: Array<{
+      message?: {
+        content?: string;
+      };
+      delta?: {
+        content?: string;
+      };
+    }>;
+    response?: string;
+    error?: string;
+  };
+  error?: string;
+}
 
-  let systemPrompt = `你是一個溫暖貼心正向樂觀的家族聊天室管家，你必須嚴格遵守：
-
-1. 永遠只用中文繁體回答
-2. 永遠保持積極正向樂觀開朗的態度，絕對不可以說負面、批評、辱罵的話
-3. 永遠只給予鼓勵、支持、建設性的正面建議，讓家人感覺溫暖舒適
-4. 回應要真誠有內容，不要浮於表面客套：
-   - 如果長輩分享人生經驗，要表達尊重受益，並提煉出值得學習的觀點
-   - 如果晚輩請教問題，要給出具體可行、符合年齡的建議，語氣親切不教條
-   - 如果成員分享生活點滴，要給予共鳴，回應內容要貼近對方的生活情境
-   - 如果討論家庭議題，要促進和諧，提出平衡包容的觀點
-5. 回應長度適中，大約 2-5 句話，不要太過簡短也不要太冗長
-6. 根據完整聊天上下文繼續對話，瞭解話題脈絡和發言者的年齡情境再回答
-7. 當家族成員分享話題後，你要主動接話給予鼓勵，延伸話題讓對話可以繼續
-8. 保持友善親和的語氣，像一個貼心有智慧的管家，讓家族氣氛更溫馨有凝聚力
-9. 記住用戶的偏好和習慣，個性化回應
-10. 以家族成員的成就為榮，給予真誠的肯定和祝福
-
-當前上下文信息：
-`;
-
-  if (context.hasBirthdayToday && context.birthdayPerson) {
-    systemPrompt += `- 今天是 ${context.birthdayPerson} 的生日，請記得祝賀\n`;
-  }
-  if (context.isHoliday && context.holidayName) {
-    systemPrompt += `- 今天是${context.holidayName}，祝大家節日快樂\n`;
-  }
-  if (context.upcomingEvents.length > 0) {
-    systemPrompt += `- 即將到來的活動：${context.upcomingEvents.map(e => e.title + '(' + e.event_date + ')').join(', ')}\n`;
-  }
-  if (context.upcomingReminders.length > 0) {
-    systemPrompt += `- 即將到來的提醒：${context.upcomingReminders.map(r => r.content + '(' + r.remind_date + ')').join(', ')}\n`;
-  }
-
-  // 添加家庭畫像信息
-  if (familyProfile) {
-    if (familyProfile.recentSummaries && familyProfile.recentSummaries.length > 0) {
-      systemPrompt += `\n最近的聊天主題摘要：\n${familyProfile.recentSummaries.slice(-3).join('\n')}\n`;
-    }
-    if (familyProfile.memberProfiles && familyProfile.memberProfiles.length > 0) {
-      systemPrompt += `\n家庭成員特性：\n`;
-      familyProfile.memberProfiles.forEach(p => {
-        systemPrompt += `- ${p.user_name}：`;
-        if (p.personality_traits?.length) systemPrompt += `性格${p.personality_traits.join('、')}`;
-        if (p.concerns?.length) systemPrompt += `，近期關注${p.concerns.join('、')}`;
-        if (p.achievements?.length) systemPrompt += `，成就${p.achievements.join('、')}`;
-        systemPrompt += '\n';
-      });
-    }
-  }
-
-  if (userPreferences && Object.keys(userPreferences).length > 0) {
-    systemPrompt += `\n用戶偏好：\n`;
-    for (const [key, value] of Object.entries(userPreferences)) {
-      systemPrompt += `- ${key}: ${value}\n`;
-    }
-  }
-
-  systemPrompt += `\n最近的聊天記錄：\n`;
-  recentMessages.slice(-30).forEach(msg => {
-    systemPrompt += `${msg.userName}: ${msg.content}\n`;
-  });
-
-  systemPrompt += `\n用戶最新發言：${message}\n\n請根據以上完整的聊天上下文，理解話題脈絡和發言者的情境，給出一個有共鳴、有溫度、能延續對話的回覆：`;
+/**
+ * 調用 AI Gateway API
+ */
+async function callAIGateway(
+  appId: string,
+  userId: string,
+  queryData: string,
+  messages: Array<{ role: string; content: string }>,
+  options: { temperature?: number; max_tokens?: number } = {}
+): Promise<AIGatewayResponse> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), AI_GATEWAY_TIMEOUT);
 
   try {
-    const messages: Array<{role: string; content: string}> = [];
-    
-    if (sessionHistory && sessionHistory.length > 0) {
-      sessionHistory.slice(-10).forEach(msg => {
-        messages.push({ role: msg.role === 'user' ? 'user' : 'assistant', content: msg.content });
-      });
-    }
-    messages.push({ role: 'user', content: message });
+    const response = await fetch(AI_GATEWAY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        app_id: appId,
+        user_id: userId,
+        query_data: queryData,
+        messages,
+        options: {
+          temperature: options.temperature ?? 0.7,
+          max_tokens: options.max_tokens ?? 2000,
+        },
+      }),
+      signal: controller.signal,
+    });
 
-    const reply = await callNVIDIAWithHistory(systemPrompt, messages, 0.8);
-    return reply.trim();
-  } catch (error) {
-    console.error('[FamilyButler] AI 回覆生成失敗:', error);
-    const fallbackReplies = [
-      '謝謝你分享這些！大家一起聊聊吧😊',
-      '很高興看到大家在这里交流～',
-      '這是個很好的話題呢！',
-      '感謝分享，說得真好👍',
-    ];
-    return fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`AI Gateway API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return { success: true, data };
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    console.error('[AIGateway] API call failed:', error.message);
+    return { success: false, error: error.message };
   }
 }
 
-// 生成每日聊天摘要
-export async function generateDailySummary(messages: Array<{user_name: string; content: string; created_at: string}>): Promise<{
+/**
+ * 構建管家系統提示詞
+ */
+function buildSystemPrompt(context: ButlerContext): string {
+  const { familyId, userName, context: ctx, familyProfile } = context;
+  
+  let prompt = `你是家族聊天室的智能管家，專為家庭成員提供溫暖、貼心的服務。
+
+你的職責：
+1. 回應家族成員的問題和請求
+2. 提醒即將到來的活動和重要事項
+3. 促進家庭成員之間的互動
+4. 記錄和總結家庭重要事件
+
+當前情況：
+- 家族 ID: ${familyId}
+- 用戶名: ${userName}`;
+
+  // 添加生日信息
+  if (ctx.hasBirthdayToday) {
+    prompt += `\n- 今天是 ${ctx.birthdayPerson} 的生日！記得送上祝福！`;
+  }
+
+  // 添加節日信息
+  if (ctx.isHoliday && ctx.holidayName) {
+    prompt += `\n- 今天是 ${ctx.holidayName}，可以發送節日祝福！`;
+  }
+
+  // 添加即將到來的事件
+  if (ctx.upcomingEvents && ctx.upcomingEvents.length > 0) {
+    prompt += `\n\n即將到來的事件：`;
+    ctx.upcomingEvents.slice(0, 3).forEach((event: any) => {
+      prompt += `\n- ${event.title} (${event.event_date})`;
+    });
+  }
+
+  // 添加提醒事項
+  if (ctx.upcomingReminders && ctx.upcomingReminders.length > 0) {
+    prompt += `\n\n提醒事項：`;
+    ctx.upcomingReminders.slice(0, 3).forEach((reminder: any) => {
+      prompt += `\n- ${reminder.content} (${reminder.remind_date})`;
+    });
+  }
+
+  // 添加家庭畫像信息
+  if (familyProfile && familyProfile.memberProfiles.length > 0) {
+    prompt += `\n\n家庭成員畫像：`;
+    familyProfile.memberProfiles.slice(0, 5).forEach((profile) => {
+      prompt += `\n- ${profile.user_name}:`;
+      if (profile.personality_traits.length > 0) {
+        prompt += ` 特質：${profile.personality_traits.join('、')}`;
+      }
+      if (profile.concerns.length > 0) {
+        prompt += ` 關注：${profile.concerns.join('、')}`;
+      }
+    });
+  }
+
+  // 添加歷史摘要
+  if (familyProfile && familyProfile.recentSummaries.length > 0) {
+    prompt += `\n\n家庭最近摘要：`;
+    familyProfile.recentSummaries.slice(0, 2).forEach((summary, i) => {
+      prompt += `\n[${i + 1}] ${summary}`;
+    });
+  }
+
+  prompt += `
+
+回复要求：
+1. 使用繁體中文
+2. 溫暖、親切、有禮貌
+3. 適當使用 emoji 增加活力
+4. 如果有重要提醒，記得提醒用戶
+5. 回覆簡潔有力，不要太長（100-300字為佳）
+6. 如果用戶詢問家庭相關的事項，結合家庭畫像和歷史摘要給出更個性化的回覆
+
+現在，用戶 "${userName}" 發送了消息：「${context.message}」
+請以管家身份回覆這條消息。`;
+
+  return prompt;
+}
+
+/**
+ * 生成管家回覆
+ */
+export async function generateButlerReply(context: ButlerContext): Promise<string> {
+  const { familyId, userId, userName, message, recentMessages, context: ctx, familyProfile } = context;
+
+  try {
+    // 構建歷史消息
+    const historyMessages: Array<{ role: string; content: string }> = recentMessages.map((msg) => ({
+      role: msg.userName === '聊天室管家' ? 'assistant' : 'user',
+      content: `${msg.userName}：${msg.content}`,
+    }));
+
+    // 構建系統提示詞
+    const systemPrompt = buildSystemPrompt(context);
+    historyMessages.unshift({ role: 'system', content: systemPrompt });
+
+    // 添加當前用戶消息
+    historyMessages.push({ role: 'user', content: message });
+
+    // 調用 AI Gateway
+    const result = await callAIGateway(
+      AI_GATEWAY_APP_ID,
+      `family-${familyId}-user-${userId}`,
+      message,
+      historyMessages,
+      { temperature: 0.7, max_tokens: 500 }
+    );
+
+    if (result.success && result.data) {
+      // 嘗試從不同格式中提取回覆
+      let reply = '';
+
+      // 格式1: OpenAI 格式
+      if (result.data.choices && result.data.choices[0]?.message?.content) {
+        reply = result.data.choices[0].message.content;
+      }
+      // 格式2: 自定義格式
+      else if (result.data.response) {
+        reply = result.data.response;
+      }
+
+      if (reply) {
+        // 保存到數據庫
+        saveButlerReply(db, {
+          family_id: familyId,
+          message_id: Date.now(),
+          content: reply,
+          trigger_type: 'ai_response',
+        });
+
+        return reply.trim();
+      }
+    }
+
+    throw new Error(result.error || 'AI 回覆為空');
+  } catch (error: any) {
+    console.error('[generateButlerReply] Error:', error);
+    throw error;
+  }
+}
+
+/**
+ * 生成生日祝賀
+ */
+export async function generateBirthdayGreeting(birthdayPerson: string): Promise<string> {
+  const systemPrompt = `你是家族聊天室的智能管家。今天是家族成員的生日，請生成一條溫暖的生日祝福。
+
+要求：
+1. 使用繁體中文
+2. 溫暖、真誠
+3. 適當使用生日相關 emoji
+4. 50-100字以內`;
+
+  const result = await callAIGateway(
+    AI_GATEWAY_APP_ID,
+    'birthday-greeting',
+    `請為 ${birthdayPerson} 生成一條生日祝福`,
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `請為 ${birthdayPerson} 生成一條生日祝福` },
+    ],
+    { temperature: 0.8, max_tokens: 200 }
+  );
+
+  if (result.success && result.data?.choices?.[0]?.message?.content) {
+    return result.data.choices[0].message.content;
+  }
+
+  // 回退到默認祝福
+  return `🎂 生日快樂！今天是 ${birthdayPerson} 的特別日子，祝願他/她生日快樂、身體健康、萬事如意！🎉`;
+}
+
+/**
+ * 生成節日祝福
+ */
+export async function generateHolidayGreeting(holidayName: string): Promise<string> {
+  const systemPrompt = `你是家族聊天室的智能管家。今天是 ${holidayName}，請生成一條節日祝福。
+
+要求：
+1. 使用繁體中文
+2. 溫暖、真誠
+3. 適當使用節日相關 emoji
+4. 50-100字以內`;
+
+  const result = await callAIGateway(
+    AI_GATEWAY_APP_ID,
+    'holiday-greeting',
+    `今天${holidayName}，請生成祝福`,
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `今天是 ${holidayName}，請生成祝福` },
+    ],
+    { temperature: 0.8, max_tokens: 200 }
+  );
+
+  if (result.success && result.data?.choices?.[0]?.message?.content) {
+    return result.data.choices[0].message.content;
+  }
+
+  // 回退到默認祝福
+  return `🎊 ${holidayName}快樂！祝大家節日愉快、闔家幸福！🎉`;
+}
+
+/**
+ * 生成每日摘要
+ */
+export interface DailySummaryResult {
   summary_text: string;
   key_topics: string[];
   key_members: string[];
   mood_score: number;
-}> {
-  const chatText = messages.slice(-100).map(m => `[${m.created_at}] ${m.user_name}: ${m.content}`).join('\n');
-
-  const prompt = `請分析這個家族今天的聊天記錄，生成一份摘要。
-
-聊天記錄：
-${chatText}
-
-請按照以下 JSON 格式輸出，只輸出純 JSON：
-{
-  "summary_text": "今天的主要話題和氛圍描述（100-200字）",
-  "key_topics": ["話題1", "話題2", "話題3"],
-  "key_members": ["活躍成員1", "活躍成員2"],
-  "mood_score": 0.8
 }
 
-mood_score 是整體情緒評分（0-1），越高表示氛圍越好。`;
-
-  try {
-    const resultText = await callNVIDIA(prompt, 0.5);
-    const fixedJson = repairJson(resultText);
-    const result = JSON.parse(fixedJson);
-    return {
-      summary_text: result.summary_text || '今天家人們有愉快的交流。',
-      key_topics: result.key_topics || [],
-      key_members: result.key_members || [],
-      mood_score: typeof result.mood_score === 'number' ? result.mood_score : 0.7,
-    };
-  } catch (error) {
-    console.error('[FamilyButler] 每日摘要生成失敗:', error);
-    const members = [...new Set(messages.map(m => m.user_name))];
-    return {
-      summary_text: '今天家人們有溫馨的交流，氣氛融洽。',
-      key_topics: ['日常生活'],
-      key_members: members.slice(0, 3),
-      mood_score: 0.7,
-    };
-  }
-}
-
-// 分析成員畫像
-export async function analyzeMemberProfile(
-  userName: string,
-  recentMessages: Array<{content: string}>
-): Promise<{
-  personality_traits: string[];
-  concerns: string[];
-}> {
-  const messagesText = recentMessages.slice(-20).map(m => m.content).join('\n');
-
-  const prompt = `請分析這位家庭成員 ${userName} 的最近聊天內容，提取他的性格特點和近期關注點。
-
-聊天內容：
-${messagesText}
-
-請按照以下 JSON 格式輸出，只輸出純 JSON：
-{
-  "personality_traits": ["性格特點1", "性格特點2"],
-  "concerns": ["近期關注點1", "近期關注點2"]
-}`;
-
-  try {
-    const resultText = await callNVIDIA(prompt, 0.3);
-    const fixedJson = repairJson(resultText);
-    const result = JSON.parse(fixedJson);
-    return {
-      personality_traits: result.personality_traits || [],
-      concerns: result.concerns || [],
-    };
-  } catch (error) {
-    console.error('[FamilyButler] 成員畫像分析失敗:', error);
-    return { personality_traits: [], concerns: [] };
-  }
-}
-
-export async function detectTaskInMessage(message: string): Promise<TaskDetectionResult> {
-  const prompt = `
-你是一個任務識別助手，請分析用戶發言是否包含需要在未來某一天提醒的事項。
-
-用戶發言："""${message}"""
-
-請按照以下 JSON 格式輸出，只輸出純 JSON：
-{
-  "hasTask": true/false,
-  "taskContent": "任務內容描述（如果有）",
-  "taskDate": "YYYY-MM-DD 格式的提醒日期（如果識別出來）",
-  "taskTime": "HH:MM 格式的提醒時間（如果識別出來，否則為 null）",
-  "confidence": 0.0-1.0 你對這個識別結果的置信度
-}
-
-如果識別不出來日期，設置 hasTask = false。千萬不要編造日期。`;
-
-  try {
-    const resultText = await callNVIDIA(prompt, 0.3);
-    const fixedJson = repairJson(resultText);
-    const result = JSON.parse(fixedJson) as TaskDetectionResult;
-    if (result.confidence < 0.7) return { hasTask: false, confidence: result.confidence };
-    if (result.hasTask && result.taskDate && !/^\d{4}-\d{2}-\d{2}$/.test(result.taskDate)) {
-      result.hasTask = false;
-      result.confidence = 0.5;
-    }
-    return result;
-  } catch (error) {
-    console.error('[FamilyButler] 任務檢測失敗:', error);
-    return { hasTask: false, confidence: 0 };
-  }
-}
-
-export async function detectNegativeSentiment(
-  messages: Array<{userName: string; userId: number; content: string}>
-): Promise<SentimentDetectionResult> {
-  const messagesText = messages.map(m => `${m.userId}: ${m.content}`).join('\n');
-
-  const prompt = `
-你是一個聊天室情緒分析助手，請分析最近幾條聊天記錄中是否：
-1. 有發生爭吵或劇烈衝突
-2. 有用戶表現出強烈負面情緒（不開心、生氣、難過等）
-
-聊天記錄：
-${messagesText}
-
-請按照以下 JSON 格式輸出，只輸出純 JSON：
-{
-  "hasConflict": true/false,
-  "hasNegativeEmotion": true/false,
-  "conflictLevel": 0.0-1.0,
-  "negativeUserList": [],
-  "suggestedIntervention": ""
-}`;
-
-  try {
-    const resultText = await callNVIDIA(prompt, 0.3);
-    const fixedJson = repairJson(resultText);
-    return JSON.parse(fixedJson) as SentimentDetectionResult;
-  } catch (error) {
-    console.error('[FamilyButler] 情緒檢測失敗:', error);
-    return { hasConflict: false, hasNegativeEmotion: false, conflictLevel: 0, negativeUserList: [], suggestedIntervention: '' };
-  }
-}
-
-export async function generateBirthdayGreeting(userName: string): Promise<string> {
-  const prompt = `請為家族成員 ${userName} 寫一段溫馨的生日祝賀詞，由家族管家發送。要求：1. 溫暖真誠 2. 用中文繁體 3. 100-200字`;
-  try {
-    const greeting = await callNVIDIA(prompt, 0.9);
-    return `🎂 ${greeting.trim()} 祝你生日快樂！🎂`;
-  } catch (error) {
-    console.error('[FamilyButler] 生日祝賀生成失敗:', error);
-    return `🎂 祝 ${userName} 生日快樂！年年有今日，歲歲有今朝，願你所有願望都能實現！🎂`;
-  }
-}
-
-export async function generateHolidayGreeting(holidayName: string): Promise<string> {
-  const prompt = `今天是${holidayName}，請以家族管家的身份給全體家族成員寫一段節日祝福。要求：1. 溫暖喜慶 2. 用中文繁體 3. 100字以內`;
-  try {
-    const greeting = await callNVIDIA(prompt, 0.8);
-    return `🎊 ${greeting.trim()} 🎊`;
-  } catch (error) {
-    console.error('[FamilyButler] 節日祝賀生成失敗:', error);
-    return `🎊 恭祝大家${holidayName}快樂！願家族和樂融融，每位成員都開心幸福！🎊`;
-  }
-}
-
-export async function generateAnnualSummary(
-  year: number,
-  chatContents: Array<{userName: string; content: string; date: string}>
-): Promise<{summary: string; keyTopics: string[]}> {
-  const sample = chatContents.slice(-200);
-  const chatText = sample.map(c => `[${c.date}] ${c.userName}: ${c.content}`).join('\n');
-
-  const prompt = `
-請幫我總結這個家族在 ${year} 年的聊天室討論，寫一份年度總結。
+export async function generateDailySummary(
+  messages: Array<{ user_name: string; content: string; created_at: string }>
+): Promise<DailySummaryResult> {
+  const systemPrompt = `你是家族聊天室的智能管家。請根據以下聊天記錄生成一份每日摘要。
 
 要求：
-1. 列出本年度幾個核心的討論主題
-2. 總結家族成員這一年來的互動氛圍
-3. 溫暖正向，回顧過去，展望來年
-4. 用中文繁體，大約 300-500 字
-
-聊天記錄樣本：
-${chatText}
-
-請按照以下 JSON 格式輸出，只輸出純 JSON：
+1. 使用繁體中文
+2. 總結今天聊天的要點（100-200字）
+3. 列出討論的主要話題
+4. 標記最活躍的成員
+5. 評估今天的氛圍（1-10分）
+6. JSON 格式輸出：
 {
-  "summary": "完整的年度總結文字",
-  "keyTopics": ["主題1", "主題2", "主題3"]
+  "summary_text": "摘要文字",
+  "key_topics": ["話題1", "話題2"],
+  "key_members": ["成員1", "成員2"],
+  "mood_score": 7
 }`;
 
+  const messagesText = messages.map((m) => `${m.user_name}：${m.content}`).join('\n');
+
+  const result = await callAIGateway(
+    AI_GATEWAY_APP_ID,
+    'daily-summary',
+    `請根據以下聊天記錄生成摘要：\n${messagesText}`,
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: messagesText },
+    ],
+    { temperature: 0.5, max_tokens: 1000 }
+  );
+
+  if (result.success && result.data?.choices?.[0]?.message?.content) {
+    try {
+      const content = result.data.choices[0].message.content;
+      // 嘗試解析 JSON
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+    } catch (e) {
+      console.error('[generateDailySummary] JSON parse error:', e);
+    }
+  }
+
+  // 回退到簡單摘要
+  const activeMembers = [...new Set(messages.map((m) => m.user_name))];
+  return {
+    summary_text: `今天家族聊天室共有 ${messages.length} 條消息，${activeMembers.length} 位成員參與聊天。`,
+    key_topics: ['日常聊天'],
+    key_members: activeMembers.slice(0, 3),
+    mood_score: 7,
+  };
+}
+
+/**
+ * 保存管家回覆到數據庫
+ */
+export function saveButlerReply(
+  db: any,
+  data: { family_id: number; message_id: number; content: string; trigger_type: string }
+) {
   try {
-    const resultText = await callNVIDIA(prompt, 0.7);
-    const fixedJson = repairJson(resultText);
-    const result = JSON.parse(fixedJson);
-    return { summary: result.summary.trim(), keyTopics: result.keyTopics || [] };
+    const stmt = db.prepare(`
+      INSERT INTO plugin_butler_replies (family_id, message_id, content, trigger_type, created_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+    `);
+    stmt.run(data.family_id, data.message_id, data.content, data.trigger_type);
   } catch (error) {
-    console.error('[FamilyButler] 年度總結生成失敗:', error);
-    return {
-      summary: `${year} 年即將過去，感謝家族成員一年來在聊天室的陪伴與交流。回顧這一年，大家分享了生活點滴，互相鼓勵支持，留下了許多溫暖美好的回憶。期待來年我們繼續相聚，分享更多幸福時光！`,
-      keyTopics: ['日常生活分享', '家庭互動', '重要事項討論'],
-    };
+    console.error('[saveButlerReply] Error:', error);
   }
 }
 
-export default {
-  generateButlerReply,
-  generateDailySummary,
-  analyzeMemberProfile,
-  detectTaskInMessage,
-  detectNegativeSentiment,
-  generateBirthdayGreeting,
-  generateHolidayGreeting,
-  generateAnnualSummary,
-};
+/**
+ * 保存每日摘要到數據庫
+ */
+export function saveDailySummary(
+  db: any,
+  data: {
+    family_id: number;
+    summary_date: string;
+    summary_text: string;
+    key_topics: string[];
+    key_members: string[];
+    mood_score: number;
+  }
+) {
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO plugin_butler_daily_summaries 
+      (family_id, summary_date, summary_text, key_topics, key_members, mood_score, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    `);
+    stmt.run(
+      data.family_id,
+      data.summary_date,
+      data.summary_text,
+      JSON.stringify(data.key_topics),
+      JSON.stringify(data.key_members),
+      data.mood_score
+    );
+  } catch (error) {
+    console.error('[saveDailySummary] Error:', error);
+  }
+}
