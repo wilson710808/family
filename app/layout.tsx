@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import I18nProviderClient from "./I18nProviderClient";
+import FetchBasePathPatch from "@/components/FetchBasePathPatch";
 import { cookies } from "next/headers";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -30,6 +31,7 @@ export default async function RootLayout({
   return (
     <html lang={initialLang === 'zh-CN' ? 'zh-CN' : 'zh-TW'}>
       <body className={`${inter.className} min-h-screen bg-gray-50`}>
+        <FetchBasePathPatch />
         <I18nProviderClient initialLang={initialLang}>
           {children}
         </I18nProviderClient>

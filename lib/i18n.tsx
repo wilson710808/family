@@ -2,9 +2,11 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
+export type Language = 'zh-TW' | 'zh-CN';
+
 interface I18nContextType {
-  lang: 'zh-TW' | 'zh-CN';
-  setLang: (lang: 'zh-TW' | 'zh-CN') => void;
+  lang: Language;
+  setLang: (lang: Language) => void;
   t: (key: string) => string;
 }
 
@@ -46,7 +48,7 @@ const translations: Record<string, Record<string, string>> = {
     // 演示账号
     demo_account: '演示帳號',
     demo_email: 'admin@family.com',
-    demo_password: 'admin123456',
+    demo_password: 'Admin@2026!',
     login_failed: '登入失敗',
     network_error: '網絡錯誤',
     loading: '載入中...',
@@ -93,7 +95,7 @@ const translations: Record<string, Record<string, string>> = {
     // 演示账号
     demo_account: '演示账号',
     demo_email: 'admin@family.com',
-    demo_password: 'admin123456',
+    demo_password: 'Admin@2026!',
     login_failed: '登录失败',
     network_error: '网络错误',
     loading: '加载中...',
@@ -111,7 +113,7 @@ const I18nContext = createContext<I18nContextType>({
   t: (key: string) => key,
 });
 
-export function I18nProvider({ children, initialLang }: { children: ReactNode; initialLang: 'zh-TW' | 'zh-CN' }) {
+export function I18nProvider({ children, initialLang }: { children: ReactNode; initialLang: Language }) {
   const [lang, setLangState] = useState<'zh-TW' | 'zh-CN'>(initialLang);
 
   useEffect(() => {
